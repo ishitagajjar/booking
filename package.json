@@ -1,0 +1,15 @@
+{
+  "name": "bookflow",
+  "version": "1.0.0",
+  "description": "Booking & invoicing SaaS for freelancers and small businesses",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "npm run dev --prefix backend",
+    "frontend": "npm run dev --prefix frontend",
+    "setup": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
