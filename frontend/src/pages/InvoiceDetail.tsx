@@ -6,6 +6,8 @@ import httpClient from '@/api/httpClient';
 import { Invoice, InvoiceStatus } from '@/types';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import AIEmailDrafter from '@/components/ai/AIEmailDrafter';
+import { useAuth } from '@/hooks/useAuth';
 
 const statusVariant: Record<InvoiceStatus, 'success' | 'warning' | 'danger' | 'info'> = {
   DRAFT: 'default' as 'info',
@@ -16,6 +18,7 @@ const statusVariant: Record<InvoiceStatus, 'success' | 'warning' | 'danger' | 'i
 
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
@@ -65,6 +68,18 @@ export default function InvoiceDetail() {
           <Badge variant={statusVariant[invoice.status]}>{invoice.status}</Badge>
         </div>
         <div className="flex gap-2">
+          {invoice.status === 'OVERDUE' && invoice.client && (
+            <AIEmailDrafter
+              context={{
+                type: 'overdue_invoice',
+                clientName: invoice.client.name,
+                amount: Number(invoice.total),
+                daysOverdue: Math.max(0, Math.floor((Date.now() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24))),
+                businessName: user?.businessName || user?.name,
+              }}
+              label="Draft Reminder"
+            />
+          )}
           {invoice.status === 'DRAFT' && <Button variant="secondary" onClick={() => updateStatus('SENT')}>Mark Sent</Button>}
           {(invoice.status === 'SENT' || invoice.status === 'OVERDUE') && <Button onClick={() => updateStatus('PAID')}>Mark Paid</Button>}
           <Button variant="ghost" onClick={downloadPDF}><ArrowDownTrayIcon className="h-4 w-4 mr-1" /> PDF</Button>

@@ -2,7 +2,7 @@
 
 ![Status](https://img.shields.io/badge/status-in%20development-yellow)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Claude API](https://img.shields.io/badge/Claude%20API-Anthropic-blueviolet)
+![Groq API](https://img.shields.io/badge/Groq%20API-Llama%203.3-blueviolet)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue?logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)
@@ -10,7 +10,7 @@
 ![Prisma](https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
 
-AI-powered booking and invoicing SaaS platform built for freelancers and small businesses. Manage clients, services, bookings, and invoices — with intelligent AI features powered by Claude.
+AI-powered booking and invoicing SaaS platform built for freelancers and small businesses. Manage clients, services, bookings, and invoices — with intelligent AI features powered by Groq (Llama 3.3).
 
 ## Tech Stack
 
@@ -21,7 +21,7 @@ AI-powered booking and invoicing SaaS platform built for freelancers and small b
 - **Database:** PostgreSQL
 - **Auth:** JWT (access + refresh tokens)
 - **Validation:** Zod
-- **AI:** Claude API (Anthropic) — tool use, structured output, streaming
+- **AI:** Groq API (Llama 3.3 70B) — tool use, structured output, streaming
 
 ### Frontend
 - **Framework:** React 18
@@ -58,22 +58,22 @@ AI-powered booking and invoicing SaaS platform built for freelancers and small b
 ## AI Features
 
 ### AI Invoice Description Generator
-Auto-generates professional invoice line items from booking details. Uses Claude API with structured prompting to produce concise, context-aware descriptions.
+Auto-generates professional invoice line items from booking details. Uses Groq API with structured prompting to produce concise, context-aware descriptions.
 
 ### Client Insights & Analytics
-Analyzes a client's booking history, spending patterns, and engagement to surface actionable insights. Claude returns structured JSON with summary, patterns, suggestions, risk level, and lifetime value.
+Analyzes a client's booking history, spending patterns, and engagement to surface actionable insights. Groq returns structured JSON with summary, patterns, suggestions, risk level, and lifetime value.
 
 ### Follow-Up Email Drafter
 Generates ready-to-send emails for overdue invoice reminders, post-booking follow-ups, and upcoming appointment reminders. Returns editable subject + body with professional tone.
 
 ### Natural Language Search
-Converts plain English queries into structured database searches across bookings, clients, invoices, and services. Claude parses the query into filters, entity type, and sort order, then Prisma executes the query.
+Converts plain English queries into structured database searches across bookings, clients, invoices, and services. Groq parses the query into filters, entity type, and sort order, then Prisma executes the query.
 
 ### Smart Pricing Suggestions
 Analyzes historical booking data, revenue trends, and category comparisons to suggest optimal pricing. Returns suggested price, confidence level, price range, reasoning, and insights.
 
 ### AI Chat Assistant
-A floating chat widget available on every page. Uses Claude's tool use (function calling) to query real business data — dashboard stats, client search, upcoming bookings, and overdue invoices — then responds conversationally.
+A floating chat widget available on every page. Uses Groq's tool use (function calling) to query real business data — dashboard stats, client search, upcoming bookings, and overdue invoices — then responds conversationally.
 
 ## Getting Started
 
@@ -82,7 +82,7 @@ A floating chat widget available on every page. Uses Claude's tool use (function
 - Node.js 18+
 - PostgreSQL 14+
 - npm 9+
-- Anthropic API key (for AI features)
+- Groq API key (for AI features)
 
 ### Setup
 
@@ -112,8 +112,8 @@ A floating chat widget available on every page. Uses Claude's tool use (function
    | `REFRESH_TOKEN_SECRET` | JWT refresh token secret |
    | `PORT` | Server port (default: 3000) |
    | `NODE_ENV` | Environment (development/production) |
-   | `CLAUDE_API_KEY` | Anthropic API key for AI features |
-   | `CLAUDE_MODEL` | Claude model ID (default: claude-sonnet-4-20250514) |
+   | `GROQ_API_KEY` | Groq API key for AI features (get from https://console.groq.com) |
+   | `GROQ_MODEL` | Groq model ID (default: llama-3.3-70b-versatile) |
 
 4. **Run database migrations**
    ```bash
@@ -163,7 +163,7 @@ BookFlow/
 │       ├── middlewares/      # Auth, validation, error handling
 │       ├── routes/           # API route definitions (incl. ai.routes.ts)
 │       ├── services/         # Business logic + AI services
-│       │   ├── ai.service.ts         # Base Claude client (askClaude, streamClaude)
+│       │   ├── ai.service.ts         # Base Groq client (askAI, streamAI)
 │       │   ├── ai-invoice.service.ts # Invoice description generator
 │       │   ├── ai-client.service.ts  # Client insights & analytics
 │       │   ├── ai-email.service.ts   # Follow-up email drafter
@@ -196,24 +196,24 @@ BookFlow/
 ### AI Architecture
 
 ```
-Frontend Components          Backend API              Claude API
-─────────────────           ───────────              ──────────
+Frontend Components          Backend API              Groq API
+─────────────────           ───────────              ────────
 AISearchBar       ──POST──▶ /api/ai/search     ──▶  Structured output (JSON)
-ClientInsights    ──POST──▶ /api/ai/client-summary   Structured output (JSON)
-AIDescriptionBtn  ──POST──▶ /api/ai/invoice-desc     Text generation
-AIEmailDrafter    ──POST──▶ /api/ai/follow-up-email  Structured output (JSON)
-PricingSuggestion ──POST──▶ /api/ai/suggest-pricing  Structured output (JSON)
+ClientInsights    ──POST──▶ /api/ai/client-insights Structured output (JSON)
+AIDescriptionBtn  ──POST──▶ /api/ai/invoice-description Text generation
+AIEmailDrafter    ──POST──▶ /api/ai/follow-up-email Structured output (JSON)
+PricingSuggestion ──POST──▶ /api/ai/suggest-pricing Structured output (JSON)
 AIChatWidget      ──POST──▶ /api/ai/chat       ──▶  Tool use (function calling)
-                                                      ├─ get_dashboard_stats
-                                                      ├─ search_clients
-                                                      ├─ get_upcoming_bookings
-                                                      └─ get_overdue_invoices
+                                                     ├─ get_dashboard_stats
+                                                     ├─ search_clients
+                                                     ├─ get_upcoming_bookings
+                                                     └─ get_overdue_invoices
 ```
 
 - All `/api/ai/*` endpoints are protected by JWT auth middleware
 - All database queries are scoped to the authenticated user (multi-tenant)
-- AI services use `@anthropic-ai/sdk` to communicate with Claude
-- Chat assistant uses Claude tool use to query Prisma/PostgreSQL in real-time
+- AI services use `groq` SDK (Llama 3.3 70B) to communicate with Groq API
+- Chat assistant uses Groq tool use to query Prisma/PostgreSQL in real-time
 
 ### API Response Format
 

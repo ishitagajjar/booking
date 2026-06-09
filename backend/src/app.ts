@@ -3,10 +3,13 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import routes from './routes';
 import { errorHandler } from './middlewares/errorHandler';
+import { config } from './config';
 
 const app = express();
 
-app.use(cors({ origin: true, credentials: true }));
+const corsOrigin = config.nodeEnv === 'production' ? config.frontendUrl : 'http://localhost:5173';
+
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
