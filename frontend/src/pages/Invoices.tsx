@@ -11,6 +11,7 @@ import Table, { Column } from '@/components/ui/Table';
 import Badge from '@/components/ui/Badge';
 import PaginationComponent from '@/components/ui/Pagination';
 import EmptyState from '@/components/ui/EmptyState';
+import AIDescriptionButton from '@/components/ai/AIDescriptionButton';
 
 const statusVariant: Record<InvoiceStatus, 'success' | 'warning' | 'danger' | 'info'> = {
   DRAFT: 'default' as 'info',
@@ -161,6 +162,15 @@ export default function Invoices() {
                   <div className="flex-1">
                     <input placeholder="Description" value={item.description} onChange={(e) => updateItem(i, 'description', e.target.value)} required className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
+                  <AIDescriptionButton
+                    bookingDetails={{
+                      serviceName: item.description || 'Professional Service',
+                      duration: 60,
+                      clientName: clients.find((c) => c.id === form.clientId)?.name,
+                      notes: form.notes || undefined,
+                    }}
+                    onGenerated={(desc) => updateItem(i, 'description', desc)}
+                  />
                   <div className="w-20">
                     <input type="number" placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(i, 'quantity', e.target.value)} required min="1" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>

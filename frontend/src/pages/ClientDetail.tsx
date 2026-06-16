@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { clientService } from '@/services/clientService';
 import { Client, Booking, BookingStatus } from '@/types';
+import ClientInsightsPanel from '@/components/ai/ClientInsights';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 
@@ -36,6 +37,7 @@ export default function ClientDetail() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
         <Card title="Client Info">
           <dl className="space-y-3">
             {client.email && <div><dt className="text-xs text-gray-500">Email</dt><dd className="text-sm text-gray-900">{client.email}</dd></div>}
@@ -45,6 +47,9 @@ export default function ClientDetail() {
             <div><dt className="text-xs text-gray-500">Added</dt><dd className="text-sm text-gray-900">{new Date(client.createdAt).toLocaleDateString()}</dd></div>
           </dl>
         </Card>
+
+        <ClientInsightsPanel client={client} />
+        </div>
 
         <div className="lg:col-span-2">
           <Card title="Booking History">

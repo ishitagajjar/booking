@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Bars3Icon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 import Sidebar from '@/components/Sidebar';
+import AIChatWidget from '@/components/ai/AIChatWidget';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function DashboardLayout() {
@@ -39,6 +40,8 @@ export default function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+
+      <AIChatWidget />
     </div>
   );
 }

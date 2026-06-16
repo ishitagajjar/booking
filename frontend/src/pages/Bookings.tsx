@@ -11,6 +11,8 @@ import Table, { Column } from '@/components/ui/Table';
 import Badge from '@/components/ui/Badge';
 import PaginationComponent from '@/components/ui/Pagination';
 import EmptyState from '@/components/ui/EmptyState';
+import AIEmailDrafter from '@/components/ai/AIEmailDrafter';
+import { useAuth } from '@/hooks/useAuth';
 
 const statusVariant: Record<BookingStatus, 'success' | 'warning' | 'danger' | 'info'> = {
   PENDING: 'warning',
@@ -20,6 +22,7 @@ const statusVariant: Record<BookingStatus, 'success' | 'warning' | 'danger' | 'i
 };
 
 export default function Bookings() {
+  const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -96,16 +99,41 @@ export default function Bookings() {
       key: 'actions',
       label: 'Actions',
       render: (b) => (
-        <select
-          value={b.status}
-          onChange={(e) => updateStatus(b.id, e.target.value as BookingStatus)}
-          className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        >
-          <option value="PENDING">Pending</option>
-          <option value="CONFIRMED">Confirmed</option>
-          <option value="COMPLETED">Completed</option>
-          <option value="CANCELLED">Cancelled</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={b.status}
+            onChange={(e) => updateStatus(b.id, e.target.value as BookingStatus)}
+            className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="PENDING">Pending</option>
+            <option value="CONFIRMED">Confirmed</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+          {b.status === 'COMPLETED' && b.client && (
+            <AIEmailDrafter
+              context={{
+                type: 'post_booking',
+                clientName: b.client.name,
+                businessName: user?.businessName || user?.name,
+              }}
+              label="Follow-up"
+              variant="ghost"
+            />
+          )}
+          {(b.status === 'CONFIRMED' || b.status === 'PENDING') && b.client && (
+            <AIEmailDrafter
+              context={{
+                type: 'appointment_reminder',
+                clientName: b.client.name,
+                appointmentDate: `${new Date(b.bookingDate).toLocaleDateString()} at ${b.startTime}`,
+                businessName: user?.businessName || user?.name,
+              }}
+              label="Remind"
+              variant="ghost"
+            />
+          )}
+        </div>
       ),
     },
   ];

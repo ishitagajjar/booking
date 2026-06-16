@@ -120,3 +120,74 @@ export interface RegisterData {
   password: string;
   businessName?: string;
 }
+
+export interface BookingDetails {
+  serviceName: string;
+  duration: number;
+  notes?: string;
+  clientName?: string;
+}
+
+export interface ClientHistory {
+  name: string;
+  totalBookings: number;
+  totalSpent: number;
+  avgBookingValue: number;
+  lastBookingDaysAgo: number;
+  bookingFrequency: string;
+}
+
+export interface ClientInsights {
+  summary: string;
+  patterns: string[];
+  suggestions: string[];
+  riskLevel: 'low' | 'medium' | 'high';
+  lifetimeValue: string;
+}
+
+export type EmailContextType = 'overdue_invoice' | 'post_booking' | 'appointment_reminder';
+
+export interface EmailContext {
+  type: EmailContextType;
+  clientName: string;
+  amount?: number;
+  daysOverdue?: number;
+  appointmentDate?: string;
+  businessName?: string;
+}
+
+export interface DraftedEmail {
+  subject: string;
+  body: string;
+}
+
+export interface ParsedSearch {
+  entity: 'bookings' | 'invoices' | 'clients' | 'services';
+  filters: Record<string, unknown>;
+  sort: string;
+  explanation: string;
+}
+
+export interface PricingData {
+  serviceName: string;
+  currentPrice: number;
+  category: string;
+  totalBookings: number;
+  avgRating?: number;
+  marketAverage?: number;
+  recentBookingPrices: number[];
+  demandLevel: 'low' | 'medium' | 'high';
+}
+
+export interface PricingSuggestion {
+  suggestedPrice: number;
+  confidence: 'low' | 'medium' | 'high';
+  reasoning: string;
+  priceRange: { min: number; max: number };
+  insights: string[];
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}

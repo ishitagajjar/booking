@@ -8,6 +8,7 @@ import Modal from '@/components/ui/Modal';
 import Badge from '@/components/ui/Badge';
 import PaginationComponent from '@/components/ui/Pagination';
 import EmptyState from '@/components/ui/EmptyState';
+import PricingSuggestion from '@/components/ai/PricingSuggestion';
 
 export default function Services() {
   const [services, setServices] = useState<Service[]>([]);
@@ -153,6 +154,15 @@ export default function Services() {
             <Input label="Price ($)" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required min="0" step="0.01" />
           </div>
           <Input label="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+          {form.name && form.price && (
+            <PricingSuggestion
+              serviceName={form.name}
+              currentPrice={parseFloat(form.price) || 0}
+              category={form.category}
+              serviceId={editing?.id}
+              onApply={(price) => setForm({ ...form, price: String(price) })}
+            />
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button type="submit" loading={loading}>{editing ? 'Update' : 'Create'}</Button>

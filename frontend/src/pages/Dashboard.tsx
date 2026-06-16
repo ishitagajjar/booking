@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { UsersIcon, WrenchScrewdriverIcon, CalendarDaysIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import StatsCard from '@/components/StatsCard';
+import AISearchBar from '@/components/ai/AISearchBar';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { clientService } from '@/services/clientService';
@@ -60,6 +61,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+
+      <AISearchBar />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard icon={<UsersIcon className="h-6 w-6" />} label="Total Clients" value={stats.clients} trend={12} />
