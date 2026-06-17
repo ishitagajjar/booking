@@ -42,6 +42,6 @@
     "node": "20.x"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "npx ts-node prisma/seed.ts"
   }
 }
