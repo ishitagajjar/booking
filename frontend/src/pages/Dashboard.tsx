@@ -5,6 +5,7 @@ import StatsCard from '@/components/StatsCard';
 import AISearchBar from '@/components/ai/AISearchBar';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
+import PageLoader from '@/components/ui/PageLoader';
 import { clientService } from '@/services/clientService';
 import { bookingService } from '@/services/bookingService';
 import { invoiceService } from '@/services/invoiceService';
@@ -30,9 +31,11 @@ const mockChartData = [
 export default function Dashboard() {
   const [stats, setStats] = useState({ clients: 0, services: 0, bookings: 0, revenue: 0 });
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
+      setFetching(true);
       try {
         const [clientsRes, servicesRes, bookingsRes, invoicesRes] = await Promise.all([
           clientService.getAll(1, 1),
@@ -53,6 +56,8 @@ export default function Dashboard() {
         }
       } catch {
         // Dashboard loads gracefully on error
+      } finally {
+        setFetching(false);
       }
     };
     loadData();
@@ -64,6 +69,10 @@ export default function Dashboard() {
 
       <AISearchBar />
 
+      {fetching ? (
+        <PageLoader />
+      ) : (
+        <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard icon={<UsersIcon className="h-6 w-6" />} label="Total Clients" value={stats.clients} trend={12} />
         <StatsCard icon={<WrenchScrewdriverIcon className="h-6 w-6" />} label="Services" value={stats.services} trend={5} />
@@ -102,6 +111,8 @@ export default function Dashboard() {
           )}
         </Card>
       </div>
+        </>
+      )}
     </div>
   );
 }

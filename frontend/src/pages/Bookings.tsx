@@ -11,6 +11,7 @@ import Table, { Column } from '@/components/ui/Table';
 import Badge from '@/components/ui/Badge';
 import PaginationComponent from '@/components/ui/Pagination';
 import EmptyState from '@/components/ui/EmptyState';
+import PageLoader from '@/components/ui/PageLoader';
 import AIEmailDrafter from '@/components/ai/AIEmailDrafter';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -33,11 +34,13 @@ export default function Bookings() {
   const [view, setView] = useState<'table' | 'calendar'>('table');
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [form, setForm] = useState({ clientId: '', serviceId: '', bookingDate: '', startTime: '', endTime: '', notes: '', totalAmount: '', status: 'PENDING' as BookingStatus });
-  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const loadBookings = useCallback(async (page = 1, searchTerm?: string, statusParam?: string) => {
     const query = searchTerm !== undefined ? searchTerm : search;
     const filterStatus = statusParam !== undefined ? statusParam : statusFilter;
+    setFetching(true);
     try {
       const { data } = await bookingService.getAll(page, 10, query || undefined, filterStatus || undefined);
       if (data.IsSuccess && data.Data) {
@@ -46,6 +49,9 @@ export default function Bookings() {
         setPagination(result.pagination);
       }
     } catch { /* handled */ }
+    finally {
+      setFetching(false);
+    }
   }, [search, statusFilter]);
 
   const loadDropdowns = async () => {
@@ -65,7 +71,7 @@ export default function Bookings() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     try {
       await bookingService.create({
         clientId: form.clientId,
@@ -80,7 +86,7 @@ export default function Bookings() {
       setModalOpen(false);
       loadBookings(pagination.page);
     } catch { /* handled */ }
-    setLoading(false);
+    setSubmitting(false);
   };
 
   const updateStatus = async (id: string, status: BookingStatus) => {
@@ -175,7 +181,9 @@ export default function Bookings() {
         </div>
       </div>
 
-      {bookings.length === 0 ? (
+      {fetching ? (
+        <PageLoader />
+      ) : bookings.length === 0 ? (
         <EmptyState title="No bookings yet" description="Create your first booking" actionLabel="Add Booking" onAction={openCreate} />
       ) : view === 'table' ? (
         <>
@@ -258,7 +266,7 @@ export default function Bookings() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" loading={loading}>Create</Button>
+            <Button type="submit" loading={submitting}>Create</Button>
           </div>
         </form>
       </Modal>

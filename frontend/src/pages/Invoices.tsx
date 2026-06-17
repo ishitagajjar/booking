@@ -11,6 +11,7 @@ import Table, { Column } from '@/components/ui/Table';
 import Badge from '@/components/ui/Badge';
 import PaginationComponent from '@/components/ui/Pagination';
 import EmptyState from '@/components/ui/EmptyState';
+import PageLoader from '@/components/ui/PageLoader';
 import AIDescriptionButton from '@/components/ai/AIDescriptionButton';
 
 const statusVariant: Record<InvoiceStatus, 'success' | 'warning' | 'danger' | 'info'> = {
@@ -35,12 +36,14 @@ export default function Invoices() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ clientId: '', taxRate: '0', dueDate: '', notes: '' });
   const [items, setItems] = useState<InvoiceItemForm[]>([{ description: '', quantity: '1', unitPrice: '' }]);
-  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const loadInvoices = useCallback(async (page = 1, searchTerm?: string, statusParam?: string) => {
     const query = searchTerm !== undefined ? searchTerm : search;
     const filterStatus = statusParam !== undefined ? statusParam : statusFilter;
+    setFetching(true);
     try {
       const { data } = await invoiceService.getAll(page, 10, query || undefined, filterStatus || undefined);
       if (data.IsSuccess && data.Data) {
@@ -49,6 +52,9 @@ export default function Invoices() {
         setPagination(result.pagination);
       }
     } catch { /* handled */ }
+    finally {
+      setFetching(false);
+    }
   }, [search, statusFilter]);
 
   useEffect(() => {
@@ -69,7 +75,7 @@ export default function Invoices() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     try {
       await invoiceService.create({
         clientId: form.clientId,
@@ -85,7 +91,7 @@ export default function Invoices() {
       setModalOpen(false);
       loadInvoices(pagination.page);
     } catch { /* handled */ }
-    setLoading(false);
+    setSubmitting(false);
   };
 
   const columns: Column<Invoice>[] = [
@@ -130,7 +136,9 @@ export default function Invoices() {
         <Button variant="secondary" onClick={() => loadInvoices(1, search)}>Search</Button>
       </div>
 
-      {invoices.length === 0 ? (
+      {fetching ? (
+        <PageLoader />
+      ) : invoices.length === 0 ? (
         <EmptyState title="No invoices yet" description="Create your first invoice" actionLabel="Create Invoice" onAction={() => setModalOpen(true)} />
       ) : (
         <>
@@ -197,7 +205,7 @@ export default function Invoices() {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" loading={loading}>Create Invoice</Button>
+            <Button type="submit" loading={submitting}>Create Invoice</Button>
           </div>
         </form>
       </Modal>

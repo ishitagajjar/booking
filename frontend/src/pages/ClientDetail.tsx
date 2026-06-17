@@ -6,6 +6,7 @@ import { Client, Booking, BookingStatus } from '@/types';
 import ClientInsightsPanel from '@/components/ai/ClientInsights';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
+import PageLoader from '@/components/ui/PageLoader';
 
 const statusVariant: Record<BookingStatus, 'success' | 'warning' | 'danger' | 'info'> = {
   PENDING: 'warning',
@@ -17,16 +18,24 @@ const statusVariant: Record<BookingStatus, 'success' | 'warning' | 'danger' | 'i
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const [client, setClient] = useState<Client | null>(null);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     if (!id) return;
-    clientService.getById(id).then(({ data }) => {
-      if (data.IsSuccess && data.Data) setClient(data.Data);
-    });
+    setFetching(true);
+    clientService.getById(id)
+      .then(({ data }) => {
+        if (data.IsSuccess && data.Data) setClient(data.Data);
+      })
+      .finally(() => setFetching(false));
   }, [id]);
 
+  if (fetching) {
+    return <PageLoader />;
+  }
+
   if (!client) {
-    return <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>;
+    return <p className="text-center py-12 text-gray-500">Client not found</p>;
   }
 
   return (
