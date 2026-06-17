@@ -6,6 +6,7 @@ import httpClient from '@/api/httpClient';
 import { Invoice, InvoiceStatus } from '@/types';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import PageLoader from '@/components/ui/PageLoader';
 import AIEmailDrafter from '@/components/ai/AIEmailDrafter';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -20,12 +21,16 @@ export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     if (!id) return;
-    invoiceService.getById(id).then(({ data }) => {
-      if (data.IsSuccess && data.Data) setInvoice(data.Data);
-    });
+    setFetching(true);
+    invoiceService.getById(id)
+      .then(({ data }) => {
+        if (data.IsSuccess && data.Data) setInvoice(data.Data);
+      })
+      .finally(() => setFetching(false));
   }, [id]);
 
   const updateStatus = async (status: InvoiceStatus) => {
@@ -55,8 +60,12 @@ export default function InvoiceDetail() {
     }
   };
 
+  if (fetching) {
+    return <PageLoader />;
+  }
+
   if (!invoice) {
-    return <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>;
+    return <p className="text-center py-12 text-gray-500">Invoice not found</p>;
   }
 
   return (

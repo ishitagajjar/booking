@@ -9,7 +9,18 @@ const app = express();
 
 const corsOrigin = config.nodeEnv === 'production' ? config.frontendUrl : 'http://localhost:5173';
 
-app.use(cors({ origin: corsOrigin, credentials: true }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || origin === corsOrigin) {
+        callback(null, origin ?? corsOrigin);
+      } else {
+        callback(null, false);
+      }
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(cookieParser());
 

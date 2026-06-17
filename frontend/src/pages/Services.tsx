@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, FormEvent } from 'react';
+import { useEffect, useState, useCallback, useRef, FormEvent } from 'react';
 import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { serviceService } from '@/services/serviceService';
 import { Service, Pagination } from '@/types';
@@ -8,30 +8,60 @@ import Modal from '@/components/ui/Modal';
 import Badge from '@/components/ui/Badge';
 import PaginationComponent from '@/components/ui/Pagination';
 import EmptyState from '@/components/ui/EmptyState';
+import PageLoader from '@/components/ui/PageLoader';
 import PricingSuggestion from '@/components/ai/PricingSuggestion';
+
+const SEARCH_MIN_CHARS = 3;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export default function Services() {
   const [services, setServices] = useState<Service[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 10, total: 0, totalPages: 0 });
   const [search, setSearch] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Service | null>(null);
   const [form, setForm] = useState({ name: '', description: '', duration: '', price: '', category: '' });
-  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const isInitialMount = useRef(true);
 
-  const loadServices = useCallback(async (page = 1, searchTerm?: string) => {
-    const query = searchTerm !== undefined ? searchTerm : search;
+  const loadServices = useCallback(async (page = 1, searchTerm = '') => {
+    setFetching(true);
     try {
-      const { data } = await serviceService.getAll(page, 10, query || undefined);
+      const { data } = await serviceService.getAll(page, 10, searchTerm || undefined);
       if (data.IsSuccess && data.Data) {
         const result = data.Data as unknown as { services: Service[]; pagination: Pagination };
         setServices(result.services);
         setPagination(result.pagination);
       }
     } catch { /* handled */ }
-  }, [search]);
+    finally {
+      setFetching(false);
+    }
+  }, []);
 
-  useEffect(() => { loadServices(1, ''); }, []);
+  useEffect(() => {
+    loadServices(1, '');
+  }, [loadServices]);
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    const trimmed = search.trim();
+    if (trimmed.length > 0 && trimmed.length < SEARCH_MIN_CHARS) return;
+
+    const timer = setTimeout(() => {
+      const query = trimmed.length >= SEARCH_MIN_CHARS ? trimmed : '';
+      setActiveSearch(query);
+      loadServices(1, query);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [search, loadServices]);
 
   const openCreate = () => {
     setEditing(null);
@@ -53,7 +83,7 @@ export default function Services() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     try {
       const payload = {
         name: form.name,
@@ -68,20 +98,20 @@ export default function Services() {
         await serviceService.create(payload);
       }
       setModalOpen(false);
-      loadServices(pagination.page);
+      loadServices(pagination.page, activeSearch);
     } catch { /* handled */ }
-    setLoading(false);
+    setSubmitting(false);
   };
 
   const toggleActive = async (service: Service) => {
     await serviceService.update(service.id, { isActive: !service.isActive });
-    loadServices(pagination.page);
+    loadServices(pagination.page, activeSearch);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this service?')) return;
     await serviceService.delete(id);
-    loadServices(pagination.page);
+    loadServices(pagination.page, activeSearch);
   };
 
   return (
@@ -91,23 +121,29 @@ export default function Services() {
         <Button onClick={openCreate}><PlusIcon className="h-4 w-4 mr-1" /> Add Service</Button>
       </div>
 
-      <div className="flex gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search services..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && loadServices(1, search)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-        <Button variant="secondary" onClick={() => loadServices(1, search)}>Search</Button>
+      <div className="relative flex-1 max-w-sm">
+        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search services..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        {search.trim().length > 0 && search.trim().length < SEARCH_MIN_CHARS && (
+          <p className="mt-1 text-xs text-gray-500">Type at least {SEARCH_MIN_CHARS} characters to search</p>
+        )}
       </div>
 
-      {services.length === 0 ? (
-        <EmptyState title="No services yet" description="Create your first service offering" actionLabel="Add Service" onAction={openCreate} />
+      {fetching ? (
+        <PageLoader />
+      ) : services.length === 0 ? (
+        <EmptyState
+          title={activeSearch ? 'No services found' : 'No services yet'}
+          description={activeSearch ? 'Try a different search term' : 'Create your first service offering'}
+          actionLabel={activeSearch ? undefined : 'Add Service'}
+          onAction={activeSearch ? undefined : openCreate}
+        />
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -133,7 +169,11 @@ export default function Services() {
               </div>
             ))}
           </div>
-          <PaginationComponent currentPage={pagination.page} totalPages={pagination.totalPages} onPageChange={loadServices} />
+          <PaginationComponent
+            currentPage={pagination.page}
+            totalPages={pagination.totalPages}
+            onPageChange={(page) => loadServices(page, activeSearch)}
+          />
         </>
       )}
 
@@ -165,7 +205,7 @@ export default function Services() {
           )}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" loading={loading}>{editing ? 'Update' : 'Create'}</Button>
+            <Button type="submit" loading={submitting}>{editing ? 'Update' : 'Create'}</Button>
           </div>
         </form>
       </Modal>

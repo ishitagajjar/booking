@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import Logo from '@/components/Logo';
 import {
   HomeIcon,
   UsersIcon,
@@ -36,7 +37,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         }`}
       >
         <div className="flex items-center justify-between p-6">
-          <h1 className="text-xl font-bold tracking-tight">BookFlow</h1>
+          <Logo className="h-9 w-9" showText />
           <button onClick={onClose} className="lg:hidden p-1 rounded-lg hover:bg-gray-800">
             <XMarkIcon className="h-5 w-5" />
           </button>

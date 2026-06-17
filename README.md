@@ -10,7 +10,7 @@
 ![Prisma](https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
 
-AI-powered booking and invoicing SaaS platform built for freelancers and small businesses. Manage clients, services, bookings, and invoices — with intelligent AI features powered by Groq (Llama 3.3).
+AI-powered booking and invoicing SaaS platform built for small businesses. Manage clients, services, bookings, and invoices — with intelligent AI features powered by Groq (Llama 3.3).
 
 ## Tech Stack
 

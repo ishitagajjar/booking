@@ -9,6 +9,7 @@ import Modal from '@/components/ui/Modal';
 import Table, { Column } from '@/components/ui/Table';
 import PaginationComponent from '@/components/ui/Pagination';
 import EmptyState from '@/components/ui/EmptyState';
+import PageLoader from '@/components/ui/PageLoader';
 
 export default function Clients() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -17,11 +18,13 @@ export default function Clients() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', notes: '' });
-  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const loadClients = useCallback(async (page = 1, searchTerm?: string) => {
     const query = searchTerm !== undefined ? searchTerm : search;
+    setFetching(true);
     try {
       const { data } = await clientService.getAll(page, 10, query || undefined);
       if (data.IsSuccess && data.Data) {
@@ -30,6 +33,9 @@ export default function Clients() {
         setPagination(result.pagination);
       }
     } catch { /* handled by interceptor */ }
+    finally {
+      setFetching(false);
+    }
   }, [search]);
 
   useEffect(() => { loadClients(1, ''); }, []);
@@ -50,7 +56,7 @@ export default function Clients() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     try {
       if (editing) {
         await clientService.update(editing.id, form);
@@ -60,7 +66,7 @@ export default function Clients() {
       setModalOpen(false);
       loadClients(pagination.page);
     } catch { /* error shown by interceptor */ }
-    setLoading(false);
+    setSubmitting(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -108,7 +114,9 @@ export default function Clients() {
         <Button variant="secondary" onClick={handleSearch}>Search</Button>
       </div>
 
-      {clients.length === 0 ? (
+      {fetching ? (
+        <PageLoader />
+      ) : clients.length === 0 ? (
         <EmptyState title="No clients yet" description="Add your first client to get started" actionLabel="Add Client" onAction={openCreate} />
       ) : (
         <>
@@ -136,7 +144,7 @@ export default function Clients() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" type="button" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" loading={loading}>{editing ? 'Update' : 'Create'}</Button>
+            <Button type="submit" loading={submitting}>{editing ? 'Update' : 'Create'}</Button>
           </div>
         </form>
       </Modal>

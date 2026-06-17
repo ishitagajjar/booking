@@ -1,7 +1,7 @@
 {
   "name": "bookflow",
   "version": "1.0.0",
-  "description": "Booking & invoicing SaaS for freelancers and small businesses",
+  "description": "Booking & invoicing SaaS for small businesses",
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
