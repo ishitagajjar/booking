@@ -12,6 +12,18 @@
 
 AI-powered booking and invoicing SaaS platform built for small businesses. Manage clients, services, bookings, and invoices — with intelligent AI features powered by Groq (Llama 3.3).
 
+## Live Demo
+
+Try the deployed app without setting up anything locally:
+
+| | |
+|---|---|
+| **Live URL** | [https://booking-two-nu.vercel.app](https://booking-two-nu.vercel.app) |
+| **Email** | `demo@bookflow.app` |
+| **Password** | `Demo@123` |
+
+The demo account includes sample clients, services, bookings, and invoices so you can explore the dashboard, calendar, invoicing, and AI features right away.
+
 ## Tech Stack
 
 ### Backend
@@ -120,6 +132,7 @@ A floating chat widget available on every page. Uses Groq's tool use (function c
    cd backend
    npm run db:migrate
    npm run db:generate
+   npm run db:seed   # optional — creates demo user (demo@bookflow.app / Demo@123)
    ```
 
 5. **Start the development servers**
