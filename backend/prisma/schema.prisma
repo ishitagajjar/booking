@@ -104,7 +104,7 @@ model Invoice {
   userId        String        @map("user_id")
   clientId      String        @map("client_id")
   bookingId     String?       @map("booking_id")
-  invoiceNumber String        @unique @map("invoice_number")
+  invoiceNumber String        @map("invoice_number")
   subtotal      Decimal       @db.Decimal(10, 2)
   taxRate       Decimal       @default(0) @map("tax_rate") @db.Decimal(10, 2)
   taxAmount     Decimal       @default(0) @map("tax_amount") @db.Decimal(10, 2)
@@ -121,6 +121,7 @@ model Invoice {
   booking Booking?      @relation(fields: [bookingId], references: [id])
   items   InvoiceItem[]
 
+  @@unique([userId, invoiceNumber])
   @@map("invoices")
 }
 

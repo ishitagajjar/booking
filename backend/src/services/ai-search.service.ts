@@ -47,6 +47,89 @@ Common filters:
   }
 }
 
+const BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'];
+const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PAID', 'OVERDUE'];
+
+const SORT_FIELDS: Record<ParsedSearch['entity'], string[]> = {
+  bookings: ['createdAt', 'bookingDate', 'totalAmount', 'status'],
+  invoices: ['createdAt', 'dueDate', 'total', 'status', 'invoiceNumber'],
+  clients: ['createdAt', 'name', 'email'],
+  services: ['createdAt', 'name', 'price', 'duration'],
+};
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  const num = typeof value === 'string' ? Number(value) : value;
+  return typeof num === 'number' && Number.isFinite(num) ? num : undefined;
+}
+
+function asDate(value: unknown): Date | undefined {
+  const str = asString(value);
+  if (!str) return undefined;
+  const date = new Date(str);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/**
+ * Translate LLM-produced filters into a Prisma where clause.
+ * Only known keys are read, and each value is type-checked, so the model
+ * cannot inject arbitrary Prisma conditions.
+ */
+function buildFilters(entity: ParsedSearch['entity'], filters: Record<string, unknown>): Record<string, unknown> {
+  const where: Record<string, unknown> = {};
+
+  switch (entity) {
+    case 'bookings': {
+      const status = asString(filters.status)?.toUpperCase();
+      if (status && BOOKING_STATUSES.includes(status)) where.status = status;
+      const clientId = asString(filters.clientId);
+      if (clientId) where.clientId = clientId;
+      const dateFrom = asDate(filters.dateFrom);
+      const dateTo = asDate(filters.dateTo);
+      if (dateFrom || dateTo) where.bookingDate = { ...(dateFrom && { gte: dateFrom }), ...(dateTo && { lte: dateTo }) };
+      break;
+    }
+    case 'invoices': {
+      const status = asString(filters.status)?.toUpperCase();
+      if (status && INVOICE_STATUSES.includes(status)) where.status = status;
+      const minAmount = asNumber(filters.minAmount);
+      const maxAmount = asNumber(filters.maxAmount);
+      if (minAmount !== undefined || maxAmount !== undefined) {
+        where.total = { ...(minAmount !== undefined && { gte: minAmount }), ...(maxAmount !== undefined && { lte: maxAmount }) };
+      }
+      const dueDate = asDate(filters.dueDate);
+      if (dueDate) where.dueDate = { lte: dueDate };
+      break;
+    }
+    case 'clients': {
+      const term = asString(filters.searchTerm);
+      if (term) {
+        where.OR = [
+          { name: { contains: term, mode: 'insensitive' } },
+          { email: { contains: term, mode: 'insensitive' } },
+        ];
+      }
+      break;
+    }
+    case 'services': {
+      const category = asString(filters.category);
+      if (category) where.category = { equals: category, mode: 'insensitive' };
+      const minPrice = asNumber(filters.minPrice);
+      const maxPrice = asNumber(filters.maxPrice);
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        where.price = { ...(minPrice !== undefined && { gte: minPrice }), ...(maxPrice !== undefined && { lte: maxPrice }) };
+      }
+      if (typeof filters.isActive === 'boolean') where.isActive = filters.isActive;
+      break;
+    }
+  }
+
+  return where;
+}
+
 /**
  * Execute a parsed search against the database
  * This would be called by the controller/route handler
@@ -57,35 +140,27 @@ export async function executeSearch(
   prisma: any, // PrismaClient type, passed from controller
   userId: string,
 ): Promise<unknown[]> {
-  const { entity, filters, sort } = parsed;
+  const { entity } = parsed;
+  if (!(entity in SORT_FIELDS)) return [];
 
-  // Example implementations - adapt to your exact schema
+  const filters = parsed.filters && typeof parsed.filters === 'object' ? parsed.filters : {};
+  // userId is set last so no filter value can override the tenant scope
+  const where = { ...buildFilters(entity, filters), userId };
+  const sort = SORT_FIELDS[entity].includes(parsed.sort) ? parsed.sort : 'createdAt';
+  const orderBy = { [sort]: 'desc' };
+
   switch (entity) {
     case 'bookings':
-      return prisma.booking.findMany({
-        where: { userId, ...filters },
-        orderBy: { [sort]: 'desc' },
-        include: { client: true, service: true },
-      });
+      return prisma.booking.findMany({ where, orderBy, include: { client: true, service: true } });
 
     case 'invoices':
-      return prisma.invoice.findMany({
-        where: { userId, ...filters },
-        orderBy: { [sort]: 'desc' },
-        include: { client: true, items: true },
-      });
+      return prisma.invoice.findMany({ where, orderBy, include: { client: true, items: true } });
 
     case 'clients':
-      return prisma.client.findMany({
-        where: { userId, ...filters },
-        orderBy: { [sort]: 'desc' },
-      });
+      return prisma.client.findMany({ where, orderBy });
 
     case 'services':
-      return prisma.service.findMany({
-        where: { userId, ...filters },
-        orderBy: { [sort]: 'desc' },
-      });
+      return prisma.service.findMany({ where, orderBy });
 
     default:
       return [];

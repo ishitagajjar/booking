@@ -4,6 +4,7 @@ import { ApiResponse } from '../utils/apiResponse';
 import { AuthRequest } from '../types';
 
 const bookingService = new BookingService();
+const NOT_FOUND_ERRORS = ['Booking not found', 'Client not found', 'Service not found'];
 
 export class BookingController {
   async getAll(req: AuthRequest, res: Response, next: NextFunction) {
@@ -34,6 +35,10 @@ export class BookingController {
       const booking = await bookingService.create(req.userId!, req.body);
       ApiResponse.success(res, booking, 'Booking created', 201);
     } catch (error) {
+      if (error instanceof Error && NOT_FOUND_ERRORS.includes(error.message)) {
+        ApiResponse.error(res, error.message, 404);
+        return;
+      }
       next(error);
     }
   }
@@ -43,7 +48,7 @@ export class BookingController {
       const booking = await bookingService.update(req.params.id, req.userId!, req.body);
       ApiResponse.success(res, booking, 'Booking updated');
     } catch (error) {
-      if (error instanceof Error && error.message === 'Booking not found') {
+      if (error instanceof Error && NOT_FOUND_ERRORS.includes(error.message)) {
         ApiResponse.error(res, error.message, 404);
         return;
       }

@@ -3,6 +3,17 @@ import { PrismaClient, Prisma } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export class BookingService {
+  private async assertOwnership(userId: string, clientId?: string, serviceId?: string) {
+    if (clientId) {
+      const client = await prisma.client.findFirst({ where: { id: clientId, userId }, select: { id: true } });
+      if (!client) throw new Error('Client not found');
+    }
+    if (serviceId) {
+      const service = await prisma.service.findFirst({ where: { id: serviceId, userId }, select: { id: true } });
+      if (!service) throw new Error('Service not found');
+    }
+  }
+
   async getAll(userId: string, page = 1, limit = 10, search?: string, status?: string) {
     const skip = (page - 1) * limit;
     const where: Record<string, unknown> = { userId };
@@ -58,6 +69,8 @@ export class BookingService {
       status?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
     }
   ) {
+    await this.assertOwnership(userId, data.clientId, data.serviceId);
+
     return prisma.booking.create({
       data: {
         userId,
@@ -90,6 +103,8 @@ export class BookingService {
   ) {
     const booking = await prisma.booking.findFirst({ where: { id, userId } });
     if (!booking) throw new Error('Booking not found');
+
+    await this.assertOwnership(userId, data.clientId, data.serviceId);
 
     const updateData: Record<string, unknown> = { ...data };
     if (data.bookingDate) updateData.bookingDate = new Date(data.bookingDate);

@@ -98,14 +98,16 @@ export class AIController {
       const response = await chat(messages, prisma, req.userId!);
 
       // Extract text content from Groq response
-      const content = response.choices[0].message.content;
+      const content = response.choices[0]?.message?.content;
 
       // Return in format frontend expects
       ApiResponse.success(res, {
-        content: [{ type: 'text', text: content || '' }],
+        content: [{ type: 'text', text: content || "Sorry, I couldn't come up with an answer. Please try rephrasing." }],
       });
-    } catch (error: any) {
-      ApiResponse.error(res, error.message || 'Chat failed', 500);
+    } catch (error) {
+      // Log details server-side; Groq error messages can include internal details
+      console.error('Chat failed:', error);
+      ApiResponse.error(res, 'Chat failed. Please try again.', 500);
     }
   }
 }

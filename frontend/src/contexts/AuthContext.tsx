@@ -27,7 +27,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await httpClient.post<ApiResponse<{ accessToken: string }>>('/auth/refresh');
       if (data.IsSuccess && data.Data) {
         setAccessToken(data.Data.accessToken);
-        // Decode user from token or make a separate call — for now we store on login
+        const { data: profile } = await httpClient.get<ApiResponse<User>>('/users/profile');
+        if (!profile.IsSuccess || !profile.Data) throw new Error(profile.Message);
+        setUser(profile.Data);
       }
     } catch {
       setAccessToken(null);
