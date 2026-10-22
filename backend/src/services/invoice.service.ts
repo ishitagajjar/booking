@@ -2,6 +2,25 @@ import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Due dates are stored as midnight UTC of the due day, so an invoice is only
+// overdue once that whole day has passed.
+function startOfTodayUTC(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * Mark the user's SENT invoices whose due date has passed as OVERDUE.
+ * Called before invoices are read, so statuses are current without a scheduled job.
+ * DRAFT invoices are skipped because they were never sent to the client.
+ */
+export async function markOverdueInvoices(userId: string): Promise<void> {
+  await prisma.invoice.updateMany({
+    where: { userId, status: 'SENT', dueDate: { lt: startOfTodayUTC() } },
+    data: { status: 'OVERDUE' },
+  });
+}
+
 export class InvoiceService {
   private static readonly MAX_NUMBER_ATTEMPTS = 5;
 
@@ -23,6 +42,8 @@ export class InvoiceService {
   }
 
   async getAll(userId: string, page = 1, limit = 10, search?: string, status?: string) {
+    await markOverdueInvoices(userId);
+
     const skip = (page - 1) * limit;
     const where: Record<string, unknown> = { userId };
 
@@ -55,6 +76,8 @@ export class InvoiceService {
   }
 
   async getById(id: string, userId: string) {
+    await markOverdueInvoices(userId);
+
     const invoice = await prisma.invoice.findFirst({
       where: { id, userId },
       include: { client: true, booking: { include: { service: true } }, items: true },
@@ -143,7 +166,14 @@ export class InvoiceService {
     const updateData: Record<string, unknown> = {};
     if (data.status) updateData.status = data.status;
     if (data.notes !== undefined) updateData.notes = data.notes;
-    if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
+    if (data.dueDate) {
+      const dueDate = new Date(data.dueDate);
+      updateData.dueDate = dueDate;
+      // Extending the due date of an overdue invoice makes it outstanding again
+      if (!data.status && invoice.status === 'OVERDUE' && dueDate >= startOfTodayUTC()) {
+        updateData.status = 'SENT';
+      }
+    }
     if (data.paidDate) updateData.paidDate = new Date(data.paidDate);
 
     if (data.items) {

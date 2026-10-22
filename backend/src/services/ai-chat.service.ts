@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk';
 import { config } from '../config';
+import { markOverdueInvoices } from './invoice.service';
 
 const groq = new Groq({
   apiKey: config.groq.apiKey,
@@ -81,6 +82,7 @@ async function executeTool(
   try {
     switch (name) {
       case 'get_dashboard_stats': {
+        await markOverdueInvoices(userId);
         const totalBookings = await prisma.booking.count({ where: { userId } });
         const bookings = await prisma.booking.findMany({
           where: { userId, status: 'COMPLETED' },
@@ -88,7 +90,7 @@ async function executeTool(
         });
         const revenue = bookings.reduce((sum: number, b: any) => sum + Number(b.totalAmount), 0);
         const pendingInvoices = await prisma.invoice.count({
-          where: { userId, status: { in: ['DRAFT', 'SENT'] } },
+          where: { userId, status: { in: ['DRAFT', 'SENT', 'OVERDUE'] } },
         });
         const upcomingBookings = await prisma.booking.count({
           where: {
@@ -142,6 +144,7 @@ async function executeTool(
       }
 
       case 'get_overdue_invoices': {
+        await markOverdueInvoices(userId);
         const invoices = await prisma.invoice.findMany({
           where: {
             userId,

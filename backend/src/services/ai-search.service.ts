@@ -1,4 +1,5 @@
 import { askAI } from './ai.service';
+import { markOverdueInvoices } from './invoice.service';
 
 const SYSTEM_PROMPT = `You are a query parser. Convert natural language search queries into structured search parameters. Return ONLY valid JSON with no additional text.`;
 
@@ -154,6 +155,7 @@ export async function executeSearch(
       return prisma.booking.findMany({ where, orderBy, include: { client: true, service: true } });
 
     case 'invoices':
+      await markOverdueInvoices(userId);
       return prisma.invoice.findMany({ where, orderBy, include: { client: true, items: true } });
 
     case 'clients':

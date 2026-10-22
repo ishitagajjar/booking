@@ -253,151 +253,125 @@ async function main() {
     ]);
     console.log(`✅ ${bookings.length} sample bookings created`);
 
-    // 5. Create 5 sample invoices with items
-    const invoices = await Promise.all([
-      prisma.invoice.create({
-        data: {
-          id: randomUUID(),
-          userId: demoUser.id,
-          clientId: clients[0].id,
-          invoiceNumber: 'INV-001',
-          status: 'PAID',
-          subtotal: 2500,
-          taxRate: 0,
-          taxAmount: 0,
-          total: 2500,
-          dueDate: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
-          paidDate: new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000),
-          notes: 'Thank you for your business!',
-          items: {
-            create: [
-              {
+    // 5. Create sample invoices with items
+    // Paid invoices are spread over the last 6 months so the dashboard revenue chart has data.
+    // Dates are relative to "now" so the chart stays filled whenever the seed runs.
+    const DAY = 24 * 60 * 60 * 1000;
+    const daysFrom = (date: Date, days: number) => new Date(date.getTime() + days * DAY);
+
+    // Noon UTC on a given day, N months back; current-month days are capped at today
+    const monthDay = (monthsAgo: number, day: number) =>
+      new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth() - monthsAgo,
+          monthsAgo === 0 ? Math.min(day, now.getUTCDate()) : day,
+          12,
+        ),
+      );
+
+    type SeedItem = { description: string; quantity: number; unitPrice: number };
+    type SeedInvoice = {
+      clientIndex: number;
+      status: 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE';
+      createdAt: Date;
+      dueDate: Date;
+      paidDate: Date | null;
+      notes: string;
+      items: SeedItem[];
+    };
+
+    // Paid invoice: created 10 days before payment, due 14 days after creation
+    const paid = (monthsAgo: number, day: number, clientIndex: number, items: SeedItem[], notes = 'Thank you for your business!'): SeedInvoice => {
+      const paidDate = monthDay(monthsAgo, day);
+      const createdAt = daysFrom(paidDate, -10);
+      return { clientIndex, status: 'PAID', createdAt, dueDate: daysFrom(createdAt, 14), paidDate, notes, items };
+    };
+
+    const websiteDesign = { description: 'Website Design - Full Site', quantity: 1, unitPrice: 2500 };
+    const seoAudit = { description: 'SEO Audit', quantity: 1, unitPrice: 800 };
+    const brandConsultation = { description: 'Brand Consultation', quantity: 1, unitPrice: 500 };
+    const socialMediaSetup = { description: 'Social Media Setup', quantity: 1, unitPrice: 1200 };
+
+    // Monthly paid revenue: 1,300 -> 2,000 -> 2,500 -> 3,000 -> 4,100 -> 4,500 (this month)
+    const invoiceData: SeedInvoice[] = [
+      paid(5, 6, 3, [seoAudit]),
+      paid(5, 18, 0, [brandConsultation]),
+      paid(4, 9, 2, [socialMediaSetup]),
+      paid(4, 22, 1, [seoAudit]),
+      paid(3, 15, 3, [websiteDesign]),
+      paid(2, 7, 4, [websiteDesign]),
+      paid(2, 20, 1, [brandConsultation]),
+      paid(1, 3, 1, [{ ...seoAudit, quantity: 2 }], ''),
+      paid(1, 12, 0, [websiteDesign]),
+      paid(0, 1, 1, [websiteDesign]),
+      paid(0, 3, 3, [socialMediaSetup]),
+      paid(0, 5, 0, [seoAudit]),
+      {
+        clientIndex: 2,
+        status: 'SENT',
+        createdAt: daysFrom(now, -15),
+        dueDate: daysFrom(now, 15),
+        paidDate: null,
+        notes: 'Payment due within 30 days',
+        items: [brandConsultation, socialMediaSetup],
+      },
+      {
+        clientIndex: 3,
+        status: 'DRAFT',
+        createdAt: daysFrom(now, -2),
+        dueDate: daysFrom(now, 30),
+        paidDate: null,
+        notes: 'Draft invoice - not yet sent',
+        items: [{ ...seoAudit, description: 'SEO Audit - Consultation' }],
+      },
+      {
+        clientIndex: 4,
+        status: 'OVERDUE',
+        createdAt: daysFrom(now, -50),
+        dueDate: daysFrom(now, -20),
+        paidDate: null,
+        notes: 'OVERDUE - Please remit payment immediately',
+        items: [{ ...websiteDesign, description: 'Website Design - Complete Project' }],
+      },
+    ];
+
+    // Number invoices in creation order. The app generates the next number from the
+    // most recently created invoice, so the highest number must have the latest createdAt.
+    invoiceData.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    const invoices = [];
+    for (const [index, inv] of invoiceData.entries()) {
+      const subtotal = inv.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+      invoices.push(
+        await prisma.invoice.create({
+          data: {
+            id: randomUUID(),
+            userId: demoUser.id,
+            clientId: clients[inv.clientIndex].id,
+            invoiceNumber: `INV-${String(index + 1).padStart(4, '0')}`,
+            status: inv.status,
+            subtotal,
+            taxRate: 0,
+            taxAmount: 0,
+            total: subtotal,
+            createdAt: inv.createdAt,
+            dueDate: inv.dueDate,
+            paidDate: inv.paidDate,
+            notes: inv.notes,
+            items: {
+              create: inv.items.map((item) => ({
                 id: randomUUID(),
-                description: 'Website Design - Full Site',
-                quantity: 1,
-                unitPrice: 2500,
-                total: 2500,
-              },
-            ],
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                total: item.quantity * item.unitPrice,
+              })),
+            },
           },
-        },
-      }),
-      prisma.invoice.create({
-        data: {
-          id: randomUUID(),
-          userId: demoUser.id,
-          clientId: clients[1].id,
-          invoiceNumber: 'INV-002',
-          status: 'PAID',
-          subtotal: 1600,
-          taxRate: 0,
-          taxAmount: 0,
-          total: 1600,
-          dueDate: new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000),
-          paidDate: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000),
-          notes: '',
-          items: {
-            create: [
-              {
-                id: randomUUID(),
-                description: 'SEO Audit',
-                quantity: 2,
-                unitPrice: 800,
-                total: 1600,
-              },
-            ],
-          },
-        },
-      }),
-      prisma.invoice.create({
-        data: {
-          id: randomUUID(),
-          userId: demoUser.id,
-          clientId: clients[2].id,
-          invoiceNumber: 'INV-003',
-          status: 'SENT',
-          subtotal: 1700,
-          taxRate: 0,
-          taxAmount: 0,
-          total: 1700,
-          dueDate: new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000),
-          paidDate: null,
-          notes: 'Payment due within 30 days',
-          items: {
-            create: [
-              {
-                id: randomUUID(),
-                description: 'Brand Consultation',
-                quantity: 1,
-                unitPrice: 500,
-                total: 500,
-              },
-              {
-                id: randomUUID(),
-                description: 'Social Media Setup',
-                quantity: 1,
-                unitPrice: 1200,
-                total: 1200,
-              },
-            ],
-          },
-        },
-      }),
-      prisma.invoice.create({
-        data: {
-          id: randomUUID(),
-          userId: demoUser.id,
-          clientId: clients[3].id,
-          invoiceNumber: 'INV-004',
-          status: 'DRAFT',
-          subtotal: 800,
-          taxRate: 0,
-          taxAmount: 0,
-          total: 800,
-          dueDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-          paidDate: null,
-          notes: 'Draft invoice - not yet sent',
-          items: {
-            create: [
-              {
-                id: randomUUID(),
-                description: 'SEO Audit - Consultation',
-                quantity: 1,
-                unitPrice: 800,
-                total: 800,
-              },
-            ],
-          },
-        },
-      }),
-      prisma.invoice.create({
-        data: {
-          id: randomUUID(),
-          userId: demoUser.id,
-          clientId: clients[4].id,
-          invoiceNumber: 'INV-005',
-          status: 'OVERDUE',
-          subtotal: 2500,
-          taxRate: 0,
-          taxAmount: 0,
-          total: 2500,
-          dueDate: new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000), // Overdue
-          paidDate: null,
-          notes: 'OVERDUE - Please remit payment immediately',
-          items: {
-            create: [
-              {
-                id: randomUUID(),
-                description: 'Website Design - Complete Project',
-                quantity: 1,
-                unitPrice: 2500,
-                total: 2500,
-              },
-            ],
-          },
-        },
-      }),
-    ]);
+        }),
+      );
+    }
     console.log(`✅ ${invoices.length} sample invoices created`);
 
     console.log('\n🎉 Seed completed successfully!');
@@ -411,7 +385,7 @@ Database seeded with:
 - 5 clients
 - 4 services
 - 8 bookings
-- 5 invoices with items
+- ${invoices.length} invoices with items (paid revenue across the last 6 months)
     `);
   } catch (error) {
     console.error('❌ Error seeding database:', error);
