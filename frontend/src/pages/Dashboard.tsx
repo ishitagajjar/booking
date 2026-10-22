@@ -6,10 +6,8 @@ import AISearchBar from '@/components/ai/AISearchBar';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import PageLoader from '@/components/ui/PageLoader';
-import { clientService } from '@/services/clientService';
 import { bookingService } from '@/services/bookingService';
-import { invoiceService } from '@/services/invoiceService';
-import { serviceService } from '@/services/serviceService';
+import { dashboardService, DashboardStats } from '@/services/dashboardService';
 import { Booking, BookingStatus } from '@/types';
 
 const statusBadgeVariant: Record<BookingStatus, 'success' | 'warning' | 'danger' | 'info'> = {
@@ -19,17 +17,16 @@ const statusBadgeVariant: Record<BookingStatus, 'success' | 'warning' | 'danger'
   CANCELLED: 'danger',
 };
 
-const mockChartData = [
-  { month: 'Jan', revenue: 2400 },
-  { month: 'Feb', revenue: 1398 },
-  { month: 'Mar', revenue: 3800 },
-  { month: 'Apr', revenue: 3908 },
-  { month: 'May', revenue: 4800 },
-  { month: 'Jun', revenue: 3490 },
-];
+const currency = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
+
+// "2026-10" -> "Oct"
+function monthLabel(month: string): string {
+  const [year, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(year, m - 1, 1)).toLocaleString(undefined, { month: 'short', timeZone: 'UTC' });
+}
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ clients: 0, services: 0, bookings: 0, revenue: 0 });
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
   const [fetching, setFetching] = useState(true);
 
@@ -37,19 +34,12 @@ export default function Dashboard() {
     const loadData = async () => {
       setFetching(true);
       try {
-        const [clientsRes, servicesRes, bookingsRes, invoicesRes] = await Promise.all([
-          clientService.getAll(1, 1),
-          serviceService.getAll(1, 1),
+        const [statsRes, bookingsRes] = await Promise.all([
+          dashboardService.getStats(),
           bookingService.getAll(1, 5),
-          invoiceService.getAll(1, 1),
         ]);
 
-        setStats({
-          clients: clientsRes.data.Data?.pagination.total ?? 0,
-          services: servicesRes.data.Data?.pagination.total ?? 0,
-          bookings: bookingsRes.data.Data?.pagination.total ?? 0,
-          revenue: invoicesRes.data.Data?.pagination.total ?? 0,
-        });
+        if (statsRes.data.Data) setStats(statsRes.data.Data);
 
         if (bookingsRes.data.Data) {
           setRecentBookings((bookingsRes.data.Data as { bookings: Booking[]; pagination: unknown }).bookings);
@@ -74,20 +64,25 @@ export default function Dashboard() {
       ) : (
         <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard icon={<UsersIcon className="h-6 w-6" />} label="Total Clients" value={stats.clients} trend={12} />
-        <StatsCard icon={<WrenchScrewdriverIcon className="h-6 w-6" />} label="Services" value={stats.services} trend={5} />
-        <StatsCard icon={<CalendarDaysIcon className="h-6 w-6" />} label="Bookings" value={stats.bookings} trend={8} />
-        <StatsCard icon={<CurrencyDollarIcon className="h-6 w-6" />} label="Invoices" value={stats.revenue} trend={-3} />
+        <StatsCard icon={<UsersIcon className="h-6 w-6" />} label="Total Clients" value={stats?.clients ?? 0} />
+        <StatsCard icon={<WrenchScrewdriverIcon className="h-6 w-6" />} label="Services" value={stats?.services ?? 0} />
+        <StatsCard icon={<CalendarDaysIcon className="h-6 w-6" />} label="Bookings" value={stats?.bookings ?? 0} />
+        <StatsCard
+          icon={<CurrencyDollarIcon className="h-6 w-6" />}
+          label="Revenue (paid)"
+          value={currency.format(stats?.revenue ?? 0)}
+          trend={stats?.revenueTrend ?? undefined}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Revenue Overview">
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={mockChartData}>
+            <BarChart data={(stats?.monthlyRevenue ?? []).map((m) => ({ ...m, label: monthLabel(m.month) }))}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
+              <Tooltip formatter={(value) => [currency.format(Number(value)), 'Revenue']} />
               <Bar dataKey="revenue" fill="#4f46e5" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

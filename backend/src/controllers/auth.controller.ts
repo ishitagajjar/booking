@@ -1,22 +1,32 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, CookieOptions } from 'express';
 import { AuthService } from '../services/auth.service';
 import { ApiResponse } from '../utils/apiResponse';
 import { config } from '../config';
 
 const authService = new AuthService();
 
+// Browsers only delete a cookie when clearCookie uses the same options it was set with
+const REFRESH_COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  secure: config.nodeEnv === 'production',
+  sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
+  path: '/',
+};
+
+function setRefreshCookie(res: Response, token: string) {
+  res.cookie('refreshToken', token, { ...REFRESH_COOKIE_OPTIONS, maxAge: config.refreshTokenExpiryMs });
+}
+
+function clearRefreshCookie(res: Response) {
+  res.clearCookie('refreshToken', REFRESH_COOKIE_OPTIONS);
+}
+
 export class AuthController {
   async register(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await authService.register(req.body);
 
-      res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: config.nodeEnv === 'production',
-        sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
-        path: '/',
-        maxAge: config.refreshTokenExpiryMs,
-      });
+      setRefreshCookie(res, result.refreshToken);
 
       ApiResponse.success(res, { user: result.user, accessToken: result.accessToken }, 'Registration successful', 201);
     } catch (error) {
@@ -33,13 +43,7 @@ export class AuthController {
       const { email, password } = req.body;
       const result = await authService.login(email, password);
 
-      res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: config.nodeEnv === 'production',
-        sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
-        path: '/',
-        maxAge: config.refreshTokenExpiryMs,
-      });
+      setRefreshCookie(res, result.refreshToken);
 
       ApiResponse.success(res, { user: result.user, accessToken: result.accessToken }, 'Login successful');
     } catch (error) {
@@ -58,7 +62,7 @@ export class AuthController {
         await authService.logout(refreshToken);
       }
 
-      res.clearCookie('refreshToken');
+      clearRefreshCookie(res);
       ApiResponse.success(res, null, 'Logged out successfully');
     } catch (error) {
       next(error);
@@ -75,18 +79,12 @@ export class AuthController {
 
       const result = await authService.refresh(oldRefreshToken);
 
-      res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: config.nodeEnv === 'production',
-        sameSite: config.nodeEnv === 'production' ? 'none' : 'lax',
-        path: '/',
-        maxAge: config.refreshTokenExpiryMs,
-      });
+      setRefreshCookie(res, result.refreshToken);
 
       ApiResponse.success(res, { accessToken: result.accessToken }, 'Token refreshed');
     } catch (error) {
       if (error instanceof Error && error.message === 'Invalid or expired refresh token') {
-        res.clearCookie('refreshToken');
+        clearRefreshCookie(res);
         ApiResponse.error(res, error.message, 401);
         return;
       }

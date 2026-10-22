@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk';
 import { config } from '../config';
+import { markOverdueInvoices } from './invoice.service';
 
 const groq = new Groq({
   apiKey: config.groq.apiKey,
@@ -81,6 +82,7 @@ async function executeTool(
   try {
     switch (name) {
       case 'get_dashboard_stats': {
+        await markOverdueInvoices(userId);
         const totalBookings = await prisma.booking.count({ where: { userId } });
         const bookings = await prisma.booking.findMany({
           where: { userId, status: 'COMPLETED' },
@@ -88,7 +90,7 @@ async function executeTool(
         });
         const revenue = bookings.reduce((sum: number, b: any) => sum + Number(b.totalAmount), 0);
         const pendingInvoices = await prisma.invoice.count({
-          where: { userId, status: { in: ['DRAFT', 'SENT'] } },
+          where: { userId, status: { in: ['DRAFT', 'SENT', 'OVERDUE'] } },
         });
         const upcomingBookings = await prisma.booking.count({
           where: {
@@ -123,7 +125,8 @@ async function executeTool(
       }
 
       case 'get_upcoming_bookings': {
-        const days = Number(input.days || 7);
+        const requested = Number(input.days);
+        const days = Number.isFinite(requested) && requested > 0 ? Math.min(requested, 90) : 7;
         const futureDate = new Date();
         futureDate.setDate(futureDate.getDate() + days);
 
@@ -141,6 +144,7 @@ async function executeTool(
       }
 
       case 'get_overdue_invoices': {
+        await markOverdueInvoices(userId);
         const invoices = await prisma.invoice.findMany({
           where: {
             userId,
@@ -187,47 +191,51 @@ Always be professional and friendly.`,
     })),
   ];
 
-  const response = await groq.chat.completions.create({
-    model: config.groq.model,
-    max_tokens: 1000,
-    tools,
-    messages: groqMessages,
-  });
-
-  const choice = response.choices[0];
-
-  // Handle tool calls - Groq uses finish_reason 'tool_calls'
-  if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
-    const toolCalls = choice.message.tool_calls;
-
-    // Execute all tool calls
-    const toolResults = await Promise.all(
-      toolCalls.map(async (toolCall: any) => {
-        // Groq sends arguments as JSON STRING - must parse
-        const args = JSON.parse(toolCall.function.arguments);
-        const result = await executeTool(toolCall.function.name, args, prisma, userId);
-        return {
-          role: 'tool' as const,
-          tool_call_id: toolCall.id,
-          content: result,
-        };
-      }),
-    );
-
-    // Send tool results back to get final answer
-    const followUp = await groq.chat.completions.create({
+  // The model may ask for tools several times in a row (e.g. stats, then clients).
+  // Keep answering tool calls up to a limit so the reply is not left empty.
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const response = await groq.chat.completions.create({
       model: config.groq.model,
       max_tokens: 1000,
       tools,
-      messages: [
-        ...groqMessages,
-        choice.message, // assistant message with tool_calls
-        ...toolResults, // tool results
-      ],
+      messages: groqMessages,
     });
 
-    return followUp;
+    const choice = response.choices[0];
+    const toolCalls = choice?.message?.tool_calls;
+    if (!toolCalls?.length) return response;
+
+    const toolResults = await Promise.all(
+      toolCalls.map(async (toolCall: any) => ({
+        role: 'tool' as const,
+        tool_call_id: toolCall.id,
+        content: await runToolCall(toolCall, prisma, userId),
+      })),
+    );
+
+    groqMessages.push(choice.message, ...toolResults);
   }
 
-  return response;
+  // Limit reached: ask for a plain answer from the data gathered so far
+  return groq.chat.completions.create({
+    model: config.groq.model,
+    max_tokens: 1000,
+    tools,
+    tool_choice: 'none',
+    messages: groqMessages,
+  });
+}
+
+const MAX_TOOL_ROUNDS = 3;
+
+async function runToolCall(toolCall: any, prisma: any, userId: string): Promise<string> {
+  // Groq sends arguments as a JSON string, and the model can produce invalid JSON
+  let args: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(toolCall.function?.arguments || '{}');
+    if (parsed && typeof parsed === 'object') args = parsed;
+  } catch {
+    return JSON.stringify({ error: 'Invalid tool arguments: expected a JSON object' });
+  }
+  return executeTool(toolCall.function?.name, args, prisma, userId);
 }

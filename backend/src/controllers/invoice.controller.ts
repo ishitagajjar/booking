@@ -38,6 +38,14 @@ export class InvoiceController {
       const invoice = await invoiceService.create(req.userId!, req.body);
       ApiResponse.success(res, invoice, 'Invoice created', 201);
     } catch (error) {
+      if (error instanceof Error && ['Client not found', 'Booking not found'].includes(error.message)) {
+        ApiResponse.error(res, error.message, 404);
+        return;
+      }
+      if (error instanceof Error && error.message === 'Booking does not belong to this client') {
+        ApiResponse.error(res, error.message, 400);
+        return;
+      }
       next(error);
     }
   }

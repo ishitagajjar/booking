@@ -28,7 +28,8 @@ export default function AIChatWidget() {
     setLoading(true);
 
     try {
-      const { data } = await aiService.chat(updatedMessages);
+      // Send only recent history; the backend rejects more than 30 messages
+      const { data } = await aiService.chat(updatedMessages.slice(-20));
       if (data.IsSuccess && data.Data?.content?.[0]?.text) {
         setMessages([...updatedMessages, { role: 'assistant', content: data.Data.content[0].text }]);
       } else {

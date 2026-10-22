@@ -2,21 +2,48 @@ import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Due dates are stored as midnight UTC of the due day, so an invoice is only
+// overdue once that whole day has passed.
+function startOfTodayUTC(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * Mark the user's SENT invoices whose due date has passed as OVERDUE.
+ * Called before invoices are read, so statuses are current without a scheduled job.
+ * DRAFT invoices are skipped because they were never sent to the client.
+ */
+export async function markOverdueInvoices(userId: string): Promise<void> {
+  await prisma.invoice.updateMany({
+    where: { userId, status: 'SENT', dueDate: { lt: startOfTodayUTC() } },
+    data: { status: 'OVERDUE' },
+  });
+}
+
 export class InvoiceService {
-  private async generateInvoiceNumber(userId: string): Promise<string> {
+  private static readonly MAX_NUMBER_ATTEMPTS = 5;
+
+  // `offset` skips ahead when a previous attempt collided with an existing number
+  private async generateInvoiceNumber(userId: string, offset = 0): Promise<string> {
     const lastInvoice = await prisma.invoice.findFirst({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       select: { invoiceNumber: true },
     });
 
-    if (!lastInvoice) return 'INV-0001';
+    const lastNumber = lastInvoice ? parseInt(lastInvoice.invoiceNumber.split('-')[1], 10) : 0;
+    const next = (Number.isNaN(lastNumber) ? 0 : lastNumber) + 1 + offset;
+    return `INV-${String(next).padStart(4, '0')}`;
+  }
 
-    const lastNumber = parseInt(lastInvoice.invoiceNumber.split('-')[1], 10);
-    return `INV-${String(lastNumber + 1).padStart(4, '0')}`;
+  private isUniqueViolation(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
   }
 
   async getAll(userId: string, page = 1, limit = 10, search?: string, status?: string) {
+    await markOverdueInvoices(userId);
+
     const skip = (page - 1) * limit;
     const where: Record<string, unknown> = { userId };
 
@@ -49,6 +76,8 @@ export class InvoiceService {
   }
 
   async getById(id: string, userId: string) {
+    await markOverdueInvoices(userId);
+
     const invoice = await prisma.invoice.findFirst({
       where: { id, userId },
       include: { client: true, booking: { include: { service: true } }, items: true },
@@ -68,36 +97,55 @@ export class InvoiceService {
       notes?: string;
     }
   ) {
-    const invoiceNumber = await this.generateInvoiceNumber(userId);
+    const client = await prisma.client.findFirst({ where: { id: data.clientId, userId }, select: { id: true } });
+    if (!client) throw new Error('Client not found');
+
+    if (data.bookingId) {
+      const booking = await prisma.booking.findFirst({
+        where: { id: data.bookingId, userId },
+        select: { clientId: true },
+      });
+      if (!booking) throw new Error('Booking not found');
+      if (booking.clientId !== data.clientId) throw new Error('Booking does not belong to this client');
+    }
 
     const subtotal = data.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const taxRate = data.taxRate || 0;
     const taxAmount = subtotal * (taxRate / 100);
     const total = subtotal + taxAmount;
 
-    return prisma.invoice.create({
-      data: {
-        userId,
-        clientId: data.clientId,
-        bookingId: data.bookingId,
-        invoiceNumber,
-        subtotal: new Prisma.Decimal(subtotal),
-        taxRate: new Prisma.Decimal(taxRate),
-        taxAmount: new Prisma.Decimal(taxAmount),
-        total: new Prisma.Decimal(total),
-        dueDate: new Date(data.dueDate),
-        notes: data.notes,
-        items: {
-          create: data.items.map((item) => ({
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: new Prisma.Decimal(item.unitPrice),
-            total: new Prisma.Decimal(item.quantity * item.unitPrice),
-          })),
-        },
-      },
-      include: { client: true, items: true },
-    });
+    // Two concurrent requests can compute the same number; the (userId, invoiceNumber)
+    // unique index rejects the second one, so retry with the next number.
+    for (let attempt = 0; ; attempt++) {
+      const invoiceNumber = await this.generateInvoiceNumber(userId, attempt);
+      try {
+        return await prisma.invoice.create({
+          data: {
+            userId,
+            clientId: data.clientId,
+            bookingId: data.bookingId,
+            invoiceNumber,
+            subtotal: new Prisma.Decimal(subtotal),
+            taxRate: new Prisma.Decimal(taxRate),
+            taxAmount: new Prisma.Decimal(taxAmount),
+            total: new Prisma.Decimal(total),
+            dueDate: new Date(data.dueDate),
+            notes: data.notes,
+            items: {
+              create: data.items.map((item) => ({
+                description: item.description,
+                quantity: item.quantity,
+                unitPrice: new Prisma.Decimal(item.unitPrice),
+                total: new Prisma.Decimal(item.quantity * item.unitPrice),
+              })),
+            },
+          },
+          include: { client: true, items: true },
+        });
+      } catch (error) {
+        if (!this.isUniqueViolation(error) || attempt + 1 >= InvoiceService.MAX_NUMBER_ATTEMPTS) throw error;
+      }
+    }
   }
 
   async update(
@@ -118,7 +166,14 @@ export class InvoiceService {
     const updateData: Record<string, unknown> = {};
     if (data.status) updateData.status = data.status;
     if (data.notes !== undefined) updateData.notes = data.notes;
-    if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
+    if (data.dueDate) {
+      const dueDate = new Date(data.dueDate);
+      updateData.dueDate = dueDate;
+      // Extending the due date of an overdue invoice makes it outstanding again
+      if (!data.status && invoice.status === 'OVERDUE' && dueDate >= startOfTodayUTC()) {
+        updateData.status = 'SENT';
+      }
+    }
     if (data.paidDate) updateData.paidDate = new Date(data.paidDate);
 
     if (data.items) {
